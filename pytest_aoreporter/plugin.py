@@ -4,7 +4,6 @@ import datetime
 
 import pytest
 from jinja2 import Template
-from py._xmlgen import html
 
 cases = []
 base_dir = os.path.dirname(__file__)
@@ -26,18 +25,20 @@ def pytest_addoption(parser):
     report = parser.getgroup("aoreporter")
     report.addoption("--ao-html",
                      action="store",
-                     dest="htmlpath",
-                     metavar="path",
-                     default="aoreport.html",
                      help='create html report file at given path'
                      )
 
 
-
 def parse_testcase_nodeid(nodeid) -> dict:
-    test_module, test_class, test_method = nodeid.split("::")
+    try:
+        test_module, test_class, test_method = nodeid.split("::")
+        module_info = f"{test_module}.{test_class}"
+    except ValueError:
+        test_module, test_method = nodeid.split("::")
+        module_info = f"{test_module}"
     case_id = str(random.randint(0, 99999)) + "_" + test_method
-    return {"test_class": f"{test_module}.{test_class}", "test_method": test_method, "case_id": case_id}
+    case_info = {"test_class": module_info, "test_method": test_method, "case_id": case_id}
+    return case_info
 
 
 @pytest.mark.hookwrapper(hookwrapper=True, tryfirst=True)
@@ -124,9 +125,7 @@ class HtmlMaker:
             html_rendered_dict[key] = rendered_html
 
         # 2.全部内容渲染到目标报告：aoreporter.html
-        timestamp = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S_')
-        report_name = timestamp + r"aoreporter.html"
-        with open(os.path.join(self.report_target_path, report_name), "w", encoding='utf-8') as f:
+        with open(self.report_target_path, "w", encoding='utf-8') as f:
             temp = Template(template_str)
             temp_str = temp.render(html_rendered_dict)
             f.write(temp_str)
@@ -165,7 +164,6 @@ def gen_reports(request):
             "end_time": end_time,
             "case_list": cases
         }
-        # report_path = request.config.getoption("--pytest-tmreport-path", default='.')
         html_maker = HtmlMaker(report_name)
         html_maker.render_template_html(summary)
         print(f"-----------AOReporter已完成测试报告!报告路径：{report_name}-----------")
